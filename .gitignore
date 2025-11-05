@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Builds
+.next/
+dist/
+coverage/
+
+# Env and runtime
+.env
+.env.*
+tmp/
+*.log
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+*.swp
