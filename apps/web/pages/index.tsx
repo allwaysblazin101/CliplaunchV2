@@ -1,7 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-type Video = { id?: string; filename: string; path: string; size: number; createdAt?: string; };
+type Video = {
+  id: string;
+  filename: string;
+  createdAt: string;
+  size: number;
+  streamUrl: string;
+  thumbUrl: string;
+};
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -11,26 +18,20 @@ export default function Home() {
   const [msg, setMsg] = useState('');
 
   async function load() {
-    try {
-      const res = await fetch(`${API}/videos`);
-      const j = await res.json();
-      // Support both shapes {files: string[]} and {videos: Video[]}
-      const list: Video[] = j.videos ?? (j.files ?? []).map((f: string) => ({ filename: f, path: `/tmp/${f}`, size: 0 }));
-      setVideos(list);
-    } catch (e) {
-      setVideos([]);
-    }
+    const res = await fetch(`${API}/videos`);
+    const data = await res.json();
+    setVideos(data.videos || []);
   }
 
   async function upload() {
     if (!file) return;
     const fd = new FormData();
     fd.append('file', file);
-    setMsg('Uploading...');
+    setMsg('Uploading…');
     try {
-      const res = await fetch(`${API}/videos/upload`, { method: 'POST', body: fd });
-      const j = await res.json();
-      setMsg(res.ok ? 'Uploaded' : 'Upload failed');
+      await fetch(`${API}/videos/upload`, { method: 'POST', body: fd });
+      setMsg('Uploaded');
+      setFile(null);
       await load();
     } catch {
       setMsg('Upload failed');
@@ -40,7 +41,7 @@ export default function Home() {
   useEffect(() => { load(); }, []);
 
   return (
-    <main style={{ maxWidth: 960, margin: '40px auto', padding: 16, fontFamily: 'system-ui, sans-serif' }}>
+    <main style={{ maxWidth: 960, margin: '40px auto', padding: 16 }}>
       <h1 style={{ fontSize: 48, marginBottom: 8 }}>Cliplauch</h1>
       <a href={`${API}/health`}>API /health</a>
 
@@ -52,40 +53,31 @@ export default function Home() {
 
       <h2 style={{ marginTop: 32 }}>Uploaded Videos</h2>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr',
-          gap: 24
-        }}
-      >
-        {videos.map((v) => {
-          const name = v.filename;
-          const src  = `${API}/videos/${encodeURIComponent(name)}`;
-          const poster = `${API}/videos/thumb/${encodeURIComponent(name)}`;
-          return (
-            <div key={name}>
-              <div style={{
-                position: 'relative',
-                width: '100%',
-                background: '#000',
-                borderRadius: 8,
-                overflow: 'hidden',
-                aspectRatio: '16 / 9'
-              }}>
-                <video
-                  controls
-                  preload="metadata"
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
-                  poster={poster}
-                >
-                  <source src={src} type="video/mp4" />
-                </video>
-              </div>
-              <div style={{ marginTop: 8, wordBreak: 'break-all' }}>{name}</div>
+      <div style={{
+        display: 'grid',
+        gap: 24,
+        gridTemplateColumns: '1fr',
+      }}>
+        {videos.map(v => (
+          <div key={v.id}>
+            <div style={{
+              position: 'relative', width: '100%',
+              aspectRatio: '16 / 9',
+              background: '#000', overflow: 'hidden',
+              borderRadius: 8,
+            }}>
+              <video
+                controls
+                preload="metadata"
+                style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+                poster={`${API}${v.thumbUrl}`}
+              >
+                <source src={`${API}${v.streamUrl}`} type="video/mp4" />
+              </video>
             </div>
-          );
-        })}
+            <div style={{ marginTop: 8, wordBreak: 'break-all' }}>{v.filename}</div>
+          </div>
+        ))}
       </div>
     </main>
   );

@@ -1,6 +1,4 @@
-generator client {
-  provider = "prisma-client-js"
-}
+generator client { provider = "prisma-client-js" }
 
 datasource db {
   provider = "postgresql"
@@ -8,9 +6,15 @@ datasource db {
 }
 
 model Video {
-  id        String   @id @default(cuid())
-  filename  String
-  path      String
-  size      Int
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  filename   String   @unique
+  size       Int
+  createdAt  DateTime @default(now())
+
+  // IPFS
+  cid        String
+  url        String   // gateway URL for the video
+
+  thumbCid   String?
+  thumbUrl   String?  // gateway URL for the thumbnail
 }
