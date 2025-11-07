@@ -1,80 +1,62 @@
-import { Controller, Get, Post, UploadedFile, UseInterceptors, Res, Param, Req } from '@nestjs/common';
+import { Controller, Get, Param, Res, Post, Body, UseGuards, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
+import { Response, Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { VideosService } from './videos.service';
+import { JwtCookieGuard } from './auth.guard';
 import * as fs from 'fs';
-import * as path from 'path';
-import { Response, Request } from 'express';
-
-function mimeFor(filename: string): string {
-  const ext = path.extname(filename).toLowerCase();
-  if (ext === '.mp4') return 'video/mp4';
-  if (ext === '.mov') return 'video/quicktime';
-  if (ext === '.webm') return 'video/webm';
-  if (ext === '.mkv') return 'video/x-matroska';
-  return 'application/octet-stream';
-}
 
 @Controller('videos')
 export class VideosController {
-  constructor(private readonly videos: VideosService) {}
+  constructor(private videos: VideosService) {}
 
   @Get()
-  async list() {
-    return this.videos.list();
-  }
+  async list() { return this.videos.list(); }
 
   @Post('upload')
+  @UseGuards(JwtCookieGuard)
   @UseInterceptors(FileInterceptor('file'))
-  async upload(@UploadedFile() file: Express.Multer.File) {
-    if (!file) return { ok: false, error: 'no file' };
-    return this.videos.saveUploadedFile(file);
+  async upload(@UploadedFile() file: Express.Multer.File, @Body() body: any) {
+    if (!file) return { success: false, error: 'no file' };
+    await this.videos.save(file, body?.title, body?.description);
+    return { success: true };
   }
 
-  @Get('thumb/:name')
-  async thumb(@Param('name') name: string, @Res() res: Response) {
-    const safe = path.basename(name);
-    const f = path.join('/tmp/thumbs', safe);
-    if (!fs.existsSync(f)) return res.status(404).end();
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.contentType('image/jpeg');
-    fs.createReadStream(f).pipe(res);
-  }
-
-  @Get('stream/:name')
-  async stream(@Param('name') name: string, @Req() req: Request, @Res() res: Response) {
-    const safe = path.basename(name);
-    const filePath = path.join('/tmp', safe);
-    if (!fs.existsSync(filePath)) return res.status(404).end();
-
-    const stat = fs.statSync(filePath);
-    const fileSize = stat.size;
-    const contentType = mimeFor(safe);
-
+  @Get('stream/:file')
+  async stream(@Param('file') file: string, @Req() req: Request, @Res() res: Response) {
+    const p = this.videos.getPathOrThrow(decodeURIComponent(file));
+    const stat = fs.statSync(p);
     const range = req.headers.range;
+    const mime = this.videos.mimeFor(p);
+
     res.setHeader('Accept-Ranges', 'bytes');
 
     if (range) {
-      // Parse "bytes=start-end"
-      const m = /^bytes=(\d*)-(\d*)$/.exec(range);
-      if (!m) return res.status(416).end();
-      const start = m[1] ? parseInt(m[1], 10) : 0;
-      const end = m[2] ? parseInt(m[2], 10) : fileSize - 1;
-      if (start >= fileSize || end >= fileSize || start > end) return res.status(416).end();
+      const [s, e] = range.replace(/bytes=/, '').split('-');
+      const start = Math.max(parseInt(s || '0', 10), 0);
+      const end = Math.min(parseInt(e || `${stat.size - 1}`, 10), stat.size - 1);
+      const size = end - start + 1;
 
-      const chunkSize = end - start + 1;
       res.status(206);
-      res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
-      res.setHeader('Content-Length', chunkSize.toString());
-      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`);
+      res.setHeader('Content-Length', String(size));
+      res.setHeader('Content-Type', mime);
+      fs.createReadStream(p, { start, end }).pipe(res);
+      return;
+    }
 
-      const stream = fs.createReadStream(filePath, { start, end });
-      stream.pipe(res);
-    } else {
-      // Full file (some browsers still OK)
-      res.status(200);
-      res.setHeader('Content-Length', fileSize.toString());
-      res.setHeader('Content-Type', contentType);
-      fs.createReadStream(filePath).pipe(res);
+    res.setHeader('Content-Length', String(stat.size));
+    res.setHeader('Content-Type', mime);
+    fs.createReadStream(p).pipe(res);
+  }
+
+  @Get('thumb/:file.jpg')
+  async thumb(@Param('file') file: string, @Res() res: Response) {
+    try {
+      const tp = await this.videos.ensureThumb(decodeURIComponent(file));
+      res.setHeader('Content-Type', 'image/jpeg');
+      fs.createReadStream(tp).pipe(res);
+    } catch {
+      res.status(204).end();
     }
   }
 }

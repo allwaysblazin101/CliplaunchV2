@@ -1,0 +1,11 @@
+/* Force light UI */
+html, body {
+  background: #ffffff !important;
+  color: #000000 !important;
+  margin: 0;
+  padding: 0;
+}
+* { box-sizing: border-box; }
+
+/* Help neutralize dark boxes */
+video, img, canvas { background: #ffffff !important; }

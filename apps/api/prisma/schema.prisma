@@ -1,20 +1,23 @@
-generator client { provider = "prisma-client-js" }
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  address   String   @unique
+  createdAt DateTime @default(now())
+}
+
 model Video {
-  id         String   @id @default(cuid())
-  filename   String   @unique
-  size       Int
-  createdAt  DateTime @default(now())
-
-  // IPFS
-  cid        String
-  url        String   // gateway URL for the video
-
-  thumbCid   String?
-  thumbUrl   String?  // gateway URL for the thumbnail
+  id          Int      @id @default(autoincrement())
+  filename    String
+  size        Int
+  title       String?
+  description String?
+  createdAt   DateTime @default(now())
 }
